@@ -1,0 +1,125 @@
+------------------------------------------------------------- screen #1
+
+# ==== HIGH grid, 16 cores ====
+set -euo pipefail
+conda activate nascseq2 >/dev/null 2>&1 || true
+BASE="/mbshome/eilbay/NASC-seq2/all cells all genes retry"
+export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
+
+echo "[HIGH] building lookup grid..."
+nice -n 10 python3 /mbshome/eilbay/NASC-seq2/burst_kinetic_parameter_estimation/parameter_table_calc_from_prob_3proxies.py \
+  --open_rate        0.001 50 36 \
+  --close_rate       0.001 50 22 \
+  --transcribe_rate  0.001 1  18 \
+  --degrade_rate     0.0867446716 0.0867446716 1 \
+  --time             4 4 1 \
+  --proc 16 \
+  --prec 10000 \
+  --table_out "$BASE/m_table_HIGH.tsv" |& tee "$BASE/m_table_HIGH.log"
+
+echo "[HIGH] trimming lookup..."
+python3 /mbshome/eilbay/NASC-seq2/burst_kinetic_parameter_estimation/trim_lookup_table.py \
+  "$BASE/m_table_HIGH.tsv" "$BASE/m_table_HIGH.trimmed.tsv"
+
+echo "[HIGH] bootstrapping genes..."
+nice -n 10 python3 /mbshome/eilbay/NASC-seq2/burst_kinetic_parameter_estimation/bootstrap_nonzero_three_estimate_lookup_one_csv_v5.py \
+  "$BASE/newrna_full.csv" \
+  "$BASE/kinetics_from_lookup_HIGH.tsv" \
+  -m "$BASE/m_table_HIGH.trimmed.tsv" \
+  --lookup_mode interp nearest noborders \
+  --proc 16 1 \
+  --reuse_lookups \
+  --bootstraps 50 |& tee "$BASE/bootstrap_HIGH.log"
+
+echo "[HIGH] plotting + exporting robust genes..."
+python3 /mbshome/eilbay/NASC-seq2/burst_kinetic_parameter_estimation/kinetics_plotting/plot_parameter_distributions_with_bootstrap_filters_v3.py \
+  "$BASE/kinetics_from_lookup_HIGH.tsv" \
+  -o "$BASE/parameter_distributions_HIGH.pdf" \
+  --conffilter kon koff ksyn burstsize \
+  -r 1.5 10 30 \
+  --export_index "$BASE/robust_genes_HIGH.txt"
+
+echo "[HIGH] done. Robust gene count:"
+wc -l "$BASE/robust_genes_HIGH.txt" || true
+
+
+------------------------------------------------------------- screen #2
+
+
+# ==== MED grid, 8 cores (paste this whole block) ====
+set -euo pipefail
+conda activate nascseq2 >/dev/null 2>&1 || true
+BASE="/mbshome/eilbay/NASC-seq2/all cells all genes retry"
+export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
+
+echo "[MED] building lookup grid..."
+nice -n 10 python3 /mbshome/eilbay/NASC-seq2/burst_kinetic_parameter_estimation/parameter_table_calc_from_prob_3proxies.py \
+  --open_rate        0.001 50 24 \
+  --close_rate       0.001 50 16 \
+  --transcribe_rate  0.001 1  12 \
+  --degrade_rate     0.0867446716 0.0867446716 1 \
+  --time             4 4 1 \
+  --proc 8 \
+  --prec 10000 \
+  --table_out "$BASE/m_table_MED.tsv" |& tee "$BASE/m_table_MED.log"
+
+echo "[MED] trimming lookup..."
+python3 /mbshome/eilbay/NASC-seq2/burst_kinetic_parameter_estimation/trim_lookup_table.py \
+  "$BASE/m_table_MED.tsv" "$BASE/m_table_MED.trimmed.tsv"
+
+echo "[MED] bootstrapping genes..."
+nice -n 10 python3 /mbshome/eilbay/NASC-seq2/burst_kinetic_parameter_estimation/bootstrap_nonzero_three_estimate_lookup_one_csv_v5.py \
+  "$BASE/newrna_full.csv" \
+  "$BASE/kinetics_from_lookup_MED.tsv" \
+  -m "$BASE/m_table_MED.trimmed.tsv" \
+  --lookup_mode interp nearest noborders \
+  --proc 8 1 \
+  --reuse_lookups \
+  --bootstraps 50 |& tee "$BASE/bootstrap_MED.log"
+
+echo "[MED] plotting + exporting robust genes..."
+python3 /mbshome/eilbay/NASC-seq2/burst_kinetic_parameter_estimation/kinetics_plotting/plot_parameter_distributions_with_bootstrap_filters_v3.py \
+  "$BASE/kinetics_from_lookup_MED.tsv" \
+  -o "$BASE/parameter_distributions_MED.pdf" \
+  --conffilter kon koff ksyn burstsize \
+  -r 1.5 10 30 \
+  --export_index "$BASE/robust_genes_MED.txt"
+
+echo "[MED] done. Robust gene count:"
+wc -l "$BASE/robust_genes_MED.txt" || true
+
+
+----------------- put together 
+
+BASE="/mbshome/eilbay/NASC-seq2/all cells all genes retry"
+
+# Bestanden uit je runs
+LOOK_MED="$BASE/kinetics_from_lookup_MED.tsv"
+LOOK_HIGH="$BASE/kinetics_from_lookup_HIGH.tsv"
+ROB_MED="$BASE/robust_genes_MED.txt"
+ROB_HIGH="$BASE/robust_genes_HIGH.txt"
+
+# Voeg eigen genen toe door een bestand te maken, bv.:
+printf "GENE1\nGENE2\n" > "$BASE/genes_of_interest.txt"   # vul aan of laat weg
+
+cat "$ROB_MED" "$ROB_HIGH" "$BASE/genes_of_interest.txt" 2>/dev/null \
+  | sed '/^$/d' | sort -u > "$BASE/genes_for_ML.txt"
+
+wc -l "$BASE/genes_for_ML.txt"
+
+awk 'NR==FNR{keep[$1]=1; next} 
+     NR==1{print; next}
+     keep[$1] && $5!="" && $6!="" && $7!=""' \
+  "$BASE/genes_for_ML.txt" "$BASE/lookup_MEDplusHIGH.tsv" \
+  > "$BASE/guesses_for_ML.tsv"
+
+wc -l "$BASE/guesses_for_ML.tsv"   # +1 door de header
+
+awk 'NR==FNR{keep[$1]=1; next} 
+     NR==1{print; next}
+     keep[$1] && $5!="" && $6!="" && $7!=""' \
+  "$BASE/genes_for_ML.txt" "$BASE/lookup_MEDplusHIGH.tsv" \
+  > "$BASE/guesses_for_ML.tsv"
+
+wc -l "$BASE/guesses_for_ML.tsv"   # +1 door de header
+
