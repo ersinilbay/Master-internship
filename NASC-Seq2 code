@@ -1,69 +1,80 @@
-# ---- 0. ENV ---------------------------------------------------------------
+#!/usr/bin/env bash
+# NASC-seq2 end-to-end with two lookup grids.
+# HIGH grid is used for primary inference (more stable/accurate); MED grid is an optional sensitivity check.
+# ML is seeded from HIGH lookup results.
+
 set -euo pipefail
 conda activate nascseq2 >/dev/null 2>&1 || true
 
-# Speed/BLAS stability
-export OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 OMP_NUM_THREADS=1
-export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
-
-# Where this run lives (change for each dataset/run)
-BASE="/mbshome/eilbay/NASC-seq2/RUN_EXAMPLE"
+# ============= 0) INPUTS — EDIT THESE =====================================
+NEWRNA="/abs/path/to/newrna.csv"  # per-subset new RNA counts (genes × cells)
+OLDRNA="/abs/path/to/oldrna.csv"  # per-subset old RNA counts (genes × cells)
+TIME_H=4                          # labeling/incubation time (hours) for this subset
+BASE="/mbshome/eilbay/NASC-seq2/RUN_EXAMPLE"   # run folder
 mkdir -p "$BASE"
+export NEWRNA OLDRNA TIME_H BASE
 
+# Use a single thread for math libraries to keep results reproducible and avoid CPU overuse across all steps.
+export OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 OMP_NUM_THREADS=1
+export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:${LD_LIBRARY_PATH:-}"
 
-# ---- 1. COMPUTE DEG RATE -------------------------------------------------
-
-TIME_H=4  # hours
-
+# ============= 1) ESTIMATE DEGRADATION RATE D (subset-specific) ============
+# This computes D for the current subset; downstream steps read it from $D.
 python3 - <<'PY' | tee "$BASE/degradation_rate.txt"
-import pandas as pd, numpy as np, math
-NEWRNA = r"__NEWRNA__"   # <<< replace
-OLDRNA = r"__OLDRNA__"   # <<< replace
-T = __TIMEH__            # <<< replaced below
+import os, pandas as pd, numpy as np, math
+NEWRNA, OLDRNA = os.environ["NEWRNA"], os.environ["OLDRNA"]
+T = float(os.environ["TIME_H"])
 
+# Load and align gene sets.
 n = pd.read_csv(NEWRNA, index_col=0)
 o = pd.read_csv(OLDRNA, index_col=0)
-n,o = n.align(o, join="outer", axis=0, fill_value=0)
+n, o = n.align(o, join="outer", axis=0, fill_value=0)
 
-# total fraction-new
-new_tot = n.to_numpy().sum()
-old_tot = o.to_numpy().sum()
-fnew = new_tot / (new_tot + old_tot) if (new_tot+old_tot)>0 else float('nan')
-d_total = -math.log(max(1e-12, 1.0 - fnew))/T if not math.isnan(fnew) else float('nan')
+# Global fraction-new → d_total.
+new_tot, old_tot = n.to_numpy().sum(), o.to_numpy().sum()
+fnew = new_tot / (new_tot + old_tot) if (new_tot + old_tot) > 0 else float('nan')
+d_total = -math.log(max(1e-12, 1.0 - fnew))/T if not math.isnan(fnew) else float('nan')      # used for downstream!
 
-# median per-cell fraction-new (gene-averaged per cell) → per-cell d, median
-f_cell = (n/(n+o).replace(0,np.nan)).mean(axis=0, skipna=True)
-d_cells = -np.log((1-f_cell.clip(0,0.999999))).dropna()/T
-d_median = float(d_cells.median()) if len(d_cells) else float('nan')
+# Per-cell median d (more robust when coverage varies).                                      # sanity check (should be similar to d_total for best results)
+f_cell = (n/(n+o).replace(0, np.nan)).mean(axis=0, skipna=True)
+d_cells = -np.log((1 - f_cell.clip(0,0.999999))).dropna()/T
+d_median = float(d_cells.median()) if len(d_cells) else float('nan')  
 
+# Print summaries and emit the single D we will use on a labeled line.
 print(f"fraction_new_total={fnew:.6f}")
 print(f"degradation_rate_total={d_total:.12f}")
 print(f"degradation_rate_median_per_cell={d_median:.12f}")
+print(f"D_used={d_total:.12f}")  # paper/demo choice: global fraction-new
 PY
+export D="$(grep -Eo 'D_used=([0-9.]+)' "$BASE/degradation_rate.txt" | cut -d= -f2)"
+echo ">>> Using D=$D (1/h) and TIME_H=$TIME_H h"
 
-# ---- 2. BUILD LOOKUP GRIDs --------------------------------------------
+# ============= 2) BUILD LOOKUP GRIDS ======================================
+# HIGH: finer grid to reduce snap-to-grid bias and stabilize bootstrap winners.
+# MED: coarser grid used as a quick sensitivity/reproducibility check.
 
-# HIGH grid (dense; 16 cores)
+# HIGH grid (denser; 16 cores)
 nice -n 10 python3 /mbshome/eilbay/NASC-seq2/burst_kinetic_parameter_estimation/parameter_table_calc_from_prob_3proxies.py \
   --open_rate        0.001 50 36 \
   --close_rate       0.001 50 22 \
   --transcribe_rate  0.001 1  18 \
   --degrade_rate     "$D" "$D" 1 \
-  --time             $TIME_H $TIME_H 1 \
+  --time             "$TIME_H" "$TIME_H" 1 \
   --proc 16 \
   --prec 10000 \
   --table_out "$BASE/m_table_HIGH.tsv" |& tee "$BASE/m_table_HIGH.log"
 
+# Trim removes unreachable/duplicate rows to speed up lookups.
 python3 /mbshome/eilbay/NASC-seq2/burst_kinetic_parameter_estimation/trim_lookup_table.py \
   "$BASE/m_table_HIGH.tsv" "$BASE/m_table_HIGH.trimmed.tsv"
 
-# MED grid (coarser; 8 cores) — optional but recommended for reproducibility
+# MED grid (coarser; optional; 8 cores)
 nice -n 10 python3 /mbshome/eilbay/NASC-seq2/burst_kinetic_parameter_estimation/parameter_table_calc_from_prob_3proxies.py \
   --open_rate        0.001 50 24 \
   --close_rate       0.001 50 16 \
   --transcribe_rate  0.001 1  12 \
   --degrade_rate     "$D" "$D" 1 \
-  --time             $TIME_H $TIME_H 1 \
+  --time             "$TIME_H" "$TIME_H" 1 \
   --proc 8 \
   --prec 10000 \
   --table_out "$BASE/m_table_MED.tsv" |& tee "$BASE/m_table_MED.log"
@@ -71,31 +82,36 @@ nice -n 10 python3 /mbshome/eilbay/NASC-seq2/burst_kinetic_parameter_estimation/
 python3 /mbshome/eilbay/NASC-seq2/burst_kinetic_parameter_estimation/trim_lookup_table.py \
   "$BASE/m_table_MED.tsv" "$BASE/m_table_MED.trimmed.tsv"
 
-# ---- 3. BOOTSTRAP -----------------------------------------------------
-
-# HIGH bootstrap
+# ============= 3) BOOTSTRAP LOOKUP FITS ===================================
+# Bootstrap gives per-gene uncertainty and defines “robust” genes before ML.
+# If your script expects a single integer after --proc, pass just that.
+# If logs warn about lookup_mode tokens, use the form your version expects.
 nice -n 10 python3 /mbshome/eilbay/NASC-seq2/burst_kinetic_parameter_estimation/bootstrap_nonzero_three_estimate_lookup_one_csv_v5.py \
   "$NEWRNA" \
   "$BASE/kinetics_from_lookup_HIGH.tsv" \
   -m "$BASE/m_table_HIGH.trimmed.tsv" \
   --lookup_mode interp nearest noborders \
-  --proc 16 1 \
+  --proc 16 \
   --reuse_lookups \
   --bootstraps 50 |& tee "$BASE/bootstrap_HIGH.log"
 
-# MED bootstrap (optional)
+# MED (optional sensitivity)
 nice -n 10 python3 /mbshome/eilbay/NASC-seq2/burst_kinetic_parameter_estimation/bootstrap_nonzero_three_estimate_lookup_one_csv_v5.py \
   "$NEWRNA" \
   "$BASE/kinetics_from_lookup_MED.tsv" \
   -m "$BASE/m_table_MED.trimmed.tsv" \
   --lookup_mode interp nearest noborders \
-  --proc 8 1 \
+  --proc 8 \
   --reuse_lookups \
   --bootstraps 50 |& tee "$BASE/bootstrap_MED.log"
 
-# ---- 4. ROBUST SELECTION ----------------------------------------------
+# ============= 4) ROBUST GENE SELECTION ===================================
+# CI-span ratio cutoffs (90% CI_high/CI_low) tuned to this dataset:
+# kon ≤ 1.5 (tight; consistent with demo)
+# koff ≤ 10 (less tight than demo; because long single-pulse 4sU poorly separates koff from ksyn > weaker identifiability)
+# ksyn ≤ 30 (tighter than demo to reduce boundary-hit ambiguity)
+# Demo (reference): -r 1 2 50 --conf 50. We adjusted these to our data for more bootstrap stability and cross-grid agreement.
 
-# HIGH robust list + plot
 python3 /mbshome/eilbay/NASC-seq2/burst_kinetic_parameter_estimation/kinetics_plotting/plot_parameter_distributions_with_bootstrap_filters_v3.py \
   "$BASE/kinetics_from_lookup_HIGH.tsv" \
   -o "$BASE/parameter_distributions_HIGH.pdf" \
@@ -103,7 +119,6 @@ python3 /mbshome/eilbay/NASC-seq2/burst_kinetic_parameter_estimation/kinetics_pl
   -r 1.5 10 30 \
   --export_index "$BASE/robust_genes_HIGH.txt"
 
-# MED robust list + plot (optional)
 python3 /mbshome/eilbay/NASC-seq2/burst_kinetic_parameter_estimation/kinetics_plotting/plot_parameter_distributions_with_bootstrap_filters_v3.py \
   "$BASE/kinetics_from_lookup_MED.tsv" \
   -o "$BASE/parameter_distributions_MED.pdf" \
@@ -111,112 +126,80 @@ python3 /mbshome/eilbay/NASC-seq2/burst_kinetic_parameter_estimation/kinetics_pl
   -r 1.5 10 30 \
   --export_index "$BASE/robust_genes_MED.txt"
 
-# Union (HIGH ∪ MED)
-{ cat "$BASE/robust_genes_HIGH.txt" "$BASE/robust_genes_MED.txt" 2>/dev/null || true; } \
- | sed '/^$/d' | sort -u > "$BASE/robust_genes_UNION.txt"
-echo "Robust union: $(wc -l < "$BASE/robust_genes_UNION.txt" 2>/dev/null || echo 0)"
-
-# ---- 5. PREPARE GUESSES FIlE -----------------------------------------
-
+# ============= 5) BUILD ML SEEDS (HIGH only) ==============================
 python3 - <<'PY'
-import pandas as pd, os
+import os, pandas as pd
 B = os.environ["BASE"]
-def read(path):
-    return pd.read_csv(path, sep='\t', index_col=0) if os.path.exists(path) else None
-
-h = read(f"{B}/kinetics_from_lookup_HIGH.tsv")
-m = read(f"{B}/kinetics_from_lookup_MED.tsv")
-
-# pick columns
+h = pd.read_csv(f"{B}/kinetics_from_lookup_HIGH.tsv", sep='\t', index_col=0)
 cols = ["kon","koff","ksyn"]
-def pick(df): return df[cols] if df is not None else None
-
-# prefer HIGH, fallback to MED
-merged = None
-if h is not None:
-    merged = pick(h).copy()
-if m is not None:
-    mm = pick(m)
-    merged = merged.combine_first(mm) if merged is not None else mm.copy()
-
-# restrict to robust union (if present)
-rob = pd.read_csv(f"{B}/robust_genes_UNION.txt", header=None, squeeze=True) if os.path.exists(f"{B}/robust_genes_UNION.txt") else None
-if rob is not None:
-    merged = merged.loc[merged.index.intersection(rob[0])]
-
-out = f"{B}/guesses_for_ML.tsv"
-merged.to_csv(out, sep='\t')
-print("Wrote", out, "rows:", len(merged))
+seeds = h[cols].copy()
+# restrict to HIGH robust list (authoritative)
+rob = pd.read_csv(f"{B}/robust_genes_HIGH.txt", header=None)[0] if os.path.exists(f"{B}/robust_genes_HIGH.txt") else seeds.index
+seeds = seeds.loc[seeds.index.intersection(rob)]
+seeds.to_csv(f"{B}/guesses_for_ML.tsv", sep='\t')
+print("Wrote", f"{B}/guesses_for_ML.tsv", "rows:", len(seeds))
 PY
 
-# ---- 6. SUBSET NEW_RNA TO ONLY ROBUST GENES -------------------------
-
+# ============= 6) SUBSET NEW RNA TO ROBUST GENES (HIGH) ===================
+# Limits ML to genes that passed the bootstrap filters on HIGH.
 python3 - <<'PY'
-import pandas as pd, os
-B = os.environ["BASE"]
+import os, pandas as pd
+B, NR = os.environ["BASE"], os.environ["NEWRNA"]
 genes = pd.read_csv(f"{B}/guesses_for_ML.tsv", sep='\t', index_col=0).index
-mat = pd.read_csv("__NEWRNA__", index_col=0)   # <<< replace again or reuse $NEWRNA
+mat = pd.read_csv(NR, index_col=0)
 keep = mat.loc[mat.index.intersection(genes)]
 keep.to_csv(f"{B}/newrna_subset_for_ML.csv")
 print("Subset:", keep.shape)
 PY
 
-# ---- 7. MAXIMUM LIKELIHOOD -----------------------------------------
-
-nice -n 10 env LD_LIBRARY_PATH="$LD_LIBRARY_PATH" \
-"$CONDA_PREFIX/bin/python3" /mbshome/eilbay/NASC-seq2/burst_kinetic_parameter_estimation/transient_ml_v2.py \
+# ============= 7) MAXIMUM LIKELIHOOD (continuous fit) =====================
+# Refines discrete lookup estimates to continuous optima.
+nice -n 10 "$CONDA_PREFIX/bin/python3" /mbshome/eilbay/NASC-seq2/burst_kinetic_parameter_estimation/transient_ml_v2.py \
   -i "$BASE/newrna_subset_for_ML.csv" \
   --guesses "$BASE/guesses_for_ML.tsv" \
   -d "$D" \
   --prec 10000 \
-  --time $TIME_H \
+  --time "$TIME_H" \
   --threads 16 \
   -o "$BASE/ML_results.csv" 2>&1 | tee "$BASE/ML_results.log"
 
-# ---- 8. ADD DERIVED METRICS TO ML TABLE ---------------------------
-
+# ============= 8) ADD DERIVED METRICS (from ML results) =======================
+# Adds common summaries in the same table for downstream use.
 python3 - <<'PY'
-import pandas as pd, numpy as np, os
+import os, pandas as pd, numpy as np
 B = os.environ["BASE"]
 df = pd.read_csv(f"{B}/ML_results.csv", index_col=0)
 kon=df["kon"].astype(float); koff=df["koff"].astype(float); ksyn=df["ksyn"].astype(float)
-df["burst_size_calc"] = ksyn/koff.replace(0,np.nan)
-df["occupancy"] = kon/(kon+koff)
-df["burst_frequency"] = (kon*koff)/(kon+koff)
-df["expression_rate"] = ksyn*df["occupancy"]
+df["burst_size_calc"] = ksyn/koff.replace(0,np.nan)          # burst size = ksyn/koff
+df["occupancy"]       = kon/(kon+koff)                        # P(ON)
+df["burst_frequency"] = (kon*koff)/(kon+koff)                 # frequency ~ kon*koff/(kon+koff)
+df["expression_rate"] = ksyn*df["occupancy"]                  # mean new-RNA rate
 df.to_csv(f"{B}/ML_results.with_derived.csv")
 print("Wrote", f"{B}/ML_results.with_derived.csv", "rows:", len(df))
 PY
 
-# ---- 9. ADD BOOTSTRAP CIs to ML TABLE -----------------------------
-
+# ============= 9) JOIN LOOKUP CIs (from HIGH) =============================
+# Attaches lookup confidence intervals from HIGH to the ML table for QC/plots.
 python3 - <<'PY'
-import pandas as pd, os, re
+import os, pandas as pd
 B = os.environ["BASE"]
 ml = pd.read_csv(f"{B}/ML_results.with_derived.csv", index_col=0)
+look = pd.read_csv(f"{B}/kinetics_from_lookup_HIGH.tsv", sep='\t', index_col=0) if os.path.exists(f"{B}/kinetics_from_lookup_HIGH.tsv") else None
 
-def maybe(path):
-    return pd.read_csv(path, sep='\t', index_col=0) if os.path.exists(path) else None
-
-cands = [maybe(f"{B}/kinetics_from_lookup_HIGH.tsv"), maybe(f"{B}/kinetics_from_lookup_MED.tsv")]
-look = None
-for df in cands:
-    if df is None: continue
-    look = df if look is None else look.combine_first(df)
-
-wanted = []
+wanted=[]
 for base in ["kon","koff","ksyn","burstsize"]:
     for p in [f"{base}_50%conf_low", f"{base}_50%conf_high",
               f"{base}_90%conf_low", f"{base}_90%conf_high",
               f"{base}_95%conf_low", f"{base}_95%conf_high",
               f"{base}_bootstrapmedian", f"{base}_bootstrapfail%"]:
-        if p in look.columns:
+        if look is not None and p in look.columns:
             wanted.append(p)
 
-qc = look[wanted].copy()
+qc = look[wanted].copy() if look is not None and wanted else pd.DataFrame(index=ml.index)
 qc.columns = ["lookup_" + c.replace("burstsize","burst_size") for c in qc.columns]
 out = ml.join(qc, how="left")
 out.to_csv(f"{B}/ML_results.with_derived_QC.csv")
-print("Wrote", f"{B}/ML_results.with_derived_QC.csv", "rows:", len(out), "QC_cols:", qc.shape[1])
+print("Wrote", f"{B}/ML_results.with_derived_QC.csv", "rows:", len(out), "QC_cols:", (qc.shape[1] if not qc.empty else 0))
 PY
 
+echo ">>> Done."
