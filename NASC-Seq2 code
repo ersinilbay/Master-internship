@@ -106,25 +106,25 @@ nice -n 10 python3 /mbshome/eilbay/NASC-seq2/burst_kinetic_parameter_estimation/
   --bootstraps 50 |& tee "$BASE/bootstrap_MED.log"
 
 # ============= 4) ROBUST GENE SELECTION ===================================
-# CI-span ratio cutoffs (90% CI_high/CI_low) tuned to this dataset:
-# kon ≤ 1.5 (tight; consistent with demo)
-# koff ≤ 10 (less tight than demo; because long single-pulse 4sU poorly separates koff from ksyn > weaker identifiability)
-# ksyn ≤ 30 (tighter than demo to reduce boundary-hit ambiguity)
-# Demo (reference): -r 1 2 50 --conf 50. We adjusted these to our data for more bootstrap stability and cross-grid agreement.
+# filter robustness: use 50% CIs and log2-width cutoffs from demo (and fits paper IQR rule)
 
 python3 /mbshome/eilbay/NASC-seq2/burst_kinetic_parameter_estimation/kinetics_plotting/plot_parameter_distributions_with_bootstrap_filters_v3.py \
   "$BASE/kinetics_from_lookup_HIGH.tsv" \
   -o "$BASE/parameter_distributions_HIGH.pdf" \
-  --conffilter kon koff ksyn burstsize \
-  -r 1.5 10 30 \
+  --conffilter kon koff ksyn \
+  --conf 50 \
+  -r 1 2 50 \
   --export_index "$BASE/robust_genes_HIGH.txt"
 
+# Optional sensitivity on MED grid (same demo thresholds)
 python3 /mbshome/eilbay/NASC-seq2/burst_kinetic_parameter_estimation/kinetics_plotting/plot_parameter_distributions_with_bootstrap_filters_v3.py \
   "$BASE/kinetics_from_lookup_MED.tsv" \
   -o "$BASE/parameter_distributions_MED.pdf" \
-  --conffilter kon koff ksyn burstsize \
-  -r 1.5 10 30 \
+  --conffilter kon koff ksyn \
+  --conf 50 \
+  -r 1 2 50 \
   --export_index "$BASE/robust_genes_MED.txt"
+
 
 # ============= 5) BUILD ML SEEDS (HIGH only) ==============================
 python3 - <<'PY'
