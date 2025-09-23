@@ -50,7 +50,7 @@ export D="$(grep -Eo 'D_used=([0-9.]+)' "$BASE/degradation_rate.txt" | cut -d= -
 echo ">>> Using D=$D (1/h) and TIME_H=$TIME_H h"
 
 # ============= 2) BUILD LOOKUP GRIDS ======================================
-# HIGH: finer grid to reduce snap-to-grid bias and stabilize bootstrap winners.
+# HIGH: finer grid to get more accurate and stable bootstrap selections. 
 # MED: coarser grid used as a quick sensitivity/reproducibility check.
 
 # HIGH grid (denser; 16 cores)
