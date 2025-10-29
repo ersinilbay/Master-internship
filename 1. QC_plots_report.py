@@ -9,7 +9,7 @@ from scipy.stats import pearsonr, gaussian_kde, spearmanr
 from scipy import sparse
 import scipy.sparse as sp
 from matplotlib.colors import Normalize as _Normalize, TwoSlopeNorm as _TwoSlopeNorm
-
+ 
 # Colormaps
 PAPER_CMAP = mpl.cm.viridis
 TRANSITION_CMAP = mpl.cm.plasma
