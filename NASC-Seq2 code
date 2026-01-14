@@ -84,8 +84,6 @@ python3 /mbshome/eilbay/NASC-seq2/burst_kinetic_parameter_estimation/trim_lookup
 
 # ============= 3) BOOTSTRAP LOOKUP FITS ===================================
 # Bootstrap gives per-gene uncertainty and defines “robust” genes before ML.
-# If your script expects a single integer after --proc, pass just that.
-# If logs warn about lookup_mode tokens, use the form your version expects.
 nice -n 10 python3 /mbshome/eilbay/NASC-seq2/burst_kinetic_parameter_estimation/bootstrap_nonzero_three_estimate_lookup_one_csv_v5.py \
   "$NEWRNA" \
   "$BASE/kinetics_from_lookup_HIGH.tsv" \
