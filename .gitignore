@@ -1,0 +1,7 @@
+data/*
+results/*
+!data/README.md
+!results/.gitkeep
+__pycache__/
+*.pyc
+.DS_Store
