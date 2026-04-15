@@ -1,6 +1,6 @@
 # Refactored QC Workflow
 
-This folder contains a post-internship refactored version of the QC workflow developed during my MSc internship on scNT-seq data from mouse embryonic stem cells (mESCs). 
+This folder contains a post-internship refactored version of the QC workflow developed during my MSc internship on 4sU-labelled/scNT-seq data from mouse embryonic stem cells (mESCs) (from Qiu et al., 2020).
 
 This workflow serves as the bridge from published processed scNT-seq count matrices toward plots for biological interpretation. Starting from paired new and old RNA gene-by-cell count matrices, it performs QC, cell-state annotation, RNA-stability validation, and exports processed data for downstream variability and burst-kinetics analyses.
 
