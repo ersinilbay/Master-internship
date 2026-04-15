@@ -1,8 +1,8 @@
 # Refactored QC Workflow
 
-This folder contains a refactored version of the QC, state-annotation, and RNA stability / turnover workflow developed during my MSc internship on scNT-seq data from mouse embryonic stem cells (mESCs).
+This folder contains a post-internship refactored version of the QC workflow developed during my MSc internship on scNT-seq data from mouse embryonic stem cells (mESCs). 
 
-This workflow serves as the bridge from published processed scNT-seq count matrices toward the biological interpretation in the internship project. Starting from paired new and old RNA gene-by-cell count matrices, it performs QC, cell-state annotation, RNA-stability validation, and exports processed data for downstream variability and burst-kinetics analyses.
+This workflow serves as the bridge from published processed scNT-seq count matrices toward plots for biological interpretation. Starting from paired new and old RNA gene-by-cell count matrices, it performs QC, cell-state annotation, RNA-stability validation, and exports processed data for downstream variability and burst-kinetics analyses.
 
 ## Biological objective
 
@@ -10,32 +10,23 @@ The biological goal of this workflow is to process 4sU/scNT-seq data from mESCs 
 
 - cell-state heterogeneity
 - transitions toward a 2-cell-like state
-- RNA stability and turnover-related behavior
-- downstream transcriptional variability analyses
+- RNA stability
+- downstream transcriptional bursting/noise analyses
 
-In practice, this workflow transforms paired labeled/unlabeled count matrices into:
+## What this workflow implements
 
-- quality-controlled single-cell objects
-- state-annotated cell populations
-- gene-level RNA stability / turnover estimates
-- processed exports for downstream analysis
+This workflow starts from published processed scNT-seq paired new (`C`) and old (`T`) RNA gene-by-cell count matrices and performs the downstream analysis steps needed to generate biologically interpretable outputs.
 
-## My contribution
+This includes:
 
-During my internship, I implemented the downstream computational workflow in Python to connect published processed scNT-seq count matrices to biologically interpretable outputs.
-
-This included:
-
-- constructing an `AnnData` object from paired new (`C`) and old (`T`) RNA gene-by-cell count matrices
-- computing quality-control metrics
-- filtering low-quality cells and low-information genes
+- constructing an `AnnData` object from paired new and old RNA count matrices
+- computing quality-control metrics and filtering low-quality cells and low-informative genes
 - performing PCA / UMAP / Leiden-based structure analysis
 - annotating cells into `Pluripotent`, `Intermediate`, and `2-cell like` states using marker-based scores
-- estimating gene-level RNA stability / turnover quantities, including half-life, degradation rate, and synthesis rate
+- estimating gene-level RNA stability, including half-life, global degradation rate, and global synthesis rate
+- measuring 4sud dropout per cell state
 - comparing inferred quantities to external reference datasets
-- exporting processed matrices and `.h5ad` objects for downstream analyses
-
-The code in this folder is a post-internship refactor of the original working script, created to improve readability and reproducibility while keeping the intended analysis logic and outputs as close as possible to the original workflow.
+- exporting quality-controlled single-cell objects, state-annotated cell populations and processed outputs for downstream analyses
 
 ## Workflow overview
 
@@ -83,8 +74,8 @@ These matrices are used to build a layered `AnnData` object containing:
 
 6. **Estimate gene-level RNA stability / turnover quantities**
    - half-life
-   - degradation rate
-   - synthesis rate
+   - global degradation rate
+   - global synthesis rate
 
 7. **Validate against external references**
    - compare estimated half-lives and rates to published reference datasets
@@ -179,7 +170,7 @@ Outputs include:
 - PCA variance plot
 - UMAP visualizations
 - cell-state annotation outputs
-- RNA stability / turnover summary tables, including half-life, degradation, and synthesis estimates
+- RNA stability estimates, including half-life, global deg/syn rates
 - state-annotated `.h5ad` objects
 - per-state matrix exports
 - HVG-based exports for downstream analyses
