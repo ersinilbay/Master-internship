@@ -1,6 +1,6 @@
 # Refactored QC Workflow
 
-This folder contains a refactored version of the QC, state-annotation, and RNA-kinetics workflow developed during my MSc internship on scNT-seq data from mouse embryonic stem cells (mESCs).
+This folder contains a refactored version of the QC, state-annotation, and RNA stability / turnover workflow developed during my MSc internship on scNT-seq data from mouse embryonic stem cells (mESCs).
 
 This workflow serves as the bridge from published processed scNT-seq count matrices toward the biological interpretation in the internship project. Starting from paired new and old RNA gene-by-cell count matrices, it performs QC, cell-state annotation, RNA-stability validation, and exports processed data for downstream variability and burst-kinetics analyses.
 
@@ -10,14 +10,14 @@ The biological goal of this workflow is to process 4sU/scNT-seq data from mESCs 
 
 - cell-state heterogeneity
 - transitions toward a 2-cell-like state
-- RNA stability and kinetic behavior
+- RNA stability and turnover-related behavior
 - downstream transcriptional variability analyses
 
 In practice, this workflow transforms paired labeled/unlabeled count matrices into:
 
 - quality-controlled single-cell objects
 - state-annotated cell populations
-- gene-level kinetic estimates
+- gene-level RNA stability / turnover estimates
 - processed exports for downstream analysis
 
 ## My contribution
@@ -31,8 +31,8 @@ This included:
 - filtering low-quality cells and low-information genes
 - performing PCA / UMAP / Leiden-based structure analysis
 - annotating cells into `Pluripotent`, `Intermediate`, and `2-cell like` states using marker-based scores
-- estimating gene-level half-life, degradation rate, and synthesis rate
-- comparing inferred kinetic quantities to external reference datasets
+- estimating gene-level RNA stability / turnover quantities, including half-life, degradation rate, and synthesis rate
+- comparing inferred quantities to external reference datasets
 - exporting processed matrices and `.h5ad` objects for downstream analyses
 
 The code in this folder is a post-internship refactor of the original working script, created to improve readability and reproducibility while keeping the intended analysis logic and outputs as close as possible to the original workflow.
@@ -81,7 +81,7 @@ These matrices are used to build a layered `AnnData` object containing:
    - score cells using pluripotency and 2-cell-like marker sets
    - define `Pluripotent`, `Intermediate`, and `2-cell like` states
 
-6. **Estimate RNA kinetic quantities**
+6. **Estimate gene-level RNA stability / turnover quantities**
    - half-life
    - degradation rate
    - synthesis rate
@@ -91,7 +91,7 @@ These matrices are used to build a layered `AnnData` object containing:
 
 8. **Export processed outputs**
    - figures
-   - kinetic summary tables
+   - RNA stability / turnover summary tables
    - state-annotated `.h5ad` files
    - matrix exports for downstream variability / burst-kinetics analyses
 
@@ -123,12 +123,12 @@ Contains reusable routines for QC figures, UMAP visualizations, validation plots
 
 ### `pipeline.py`
 Core analysis logic.  
-Contains the main computational steps for QC, dimensionality reduction, annotation, kinetic estimation, validation, and export.
+Contains the main computational steps for QC, dimensionality reduction, annotation, RNA stability / turnover estimation, validation, and export.
 
 ## Example figure: cell-state annotation
 
 <p align="center">
-  <img src="examples/umap_cell_states.svg" width="230">
+  <img src="examples/umap_cell_states.svg" width="300">
 </p>
 
 This UMAP shows the broad state annotation used in the workflow, separating cells into `Pluripotent`, `Intermediate`, and `2-cell like` populations. These state labels are used later to structure downstream analyses and interpret transcriptional heterogeneity in the mESC population.
@@ -158,7 +158,7 @@ These processed input matrices still required substantial downstream analysis, i
 - cell and gene filtering
 - dimensionality reduction and clustering
 - cell-state annotation
-- RNA kinetic estimation
+- RNA stability / turnover estimation
 - comparison to external reference datasets
 
 Additional local reference files used in the workflow were derived from published studies, including:
@@ -179,7 +179,7 @@ Outputs include:
 - PCA variance plot
 - UMAP visualizations
 - cell-state annotation outputs
-- half-life / degradation / synthesis summary tables
+- RNA stability / turnover summary tables, including half-life, degradation, and synthesis estimates
 - state-annotated `.h5ad` objects
 - per-state matrix exports
 - HVG-based exports for downstream analyses
