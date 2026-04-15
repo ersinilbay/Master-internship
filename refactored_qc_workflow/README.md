@@ -2,7 +2,7 @@
 
 This folder contains a refactored version of the QC, state-annotation, and RNA-kinetics workflow developed during my MSc internship on scNT-seq data from mouse embryonic stem cells (mESCs).
 
-The workflow is not just used to generate figures. It serves as the bridge between raw scNT-seq input and the biological interpretation in the internship project: starting from paired new and old RNA count matrices, it performs QC, cell-state annotation, RNA-stability validation, and exports processed data for downstream variability and burst-kinetics analyses.
+This workflow serves as the bridge from published processed scNT-seq count matrices toward the biological interpretation in the internship project. Starting from paired new and old RNA gene-by-cell count matrices, it performs QC, cell-state annotation, RNA-stability validation, and exports processed data for downstream variability and burst-kinetics analyses.
 
 ## Biological objective
 
@@ -13,7 +13,7 @@ The biological goal of this workflow is to process 4sU/scNT-seq data from mESCs 
 - RNA stability and kinetic behavior
 - downstream transcriptional variability analyses
 
-In practice, this workflow transforms raw paired labeled/unlabeled count matrices into:
+In practice, this workflow transforms paired labeled/unlabeled count matrices into:
 
 - quality-controlled single-cell objects
 - state-annotated cell populations
@@ -22,11 +22,11 @@ In practice, this workflow transforms raw paired labeled/unlabeled count matrice
 
 ## My contribution
 
-During my internship, I implemented the computational workflow in Python to connect raw scNT-seq count matrices to biologically interpretable outputs.
+During my internship, I implemented the downstream computational workflow in Python to connect published processed scNT-seq count matrices to biologically interpretable outputs.
 
 This included:
 
-- constructing an `AnnData` object from paired new (`C`) and old (`T`) RNA count matrices
+- constructing an `AnnData` object from paired new (`C`) and old (`T`) RNA gene-by-cell count matrices
 - computing quality-control metrics
 - filtering low-quality cells and low-information genes
 - performing PCA / UMAP / Leiden-based structure analysis
@@ -41,7 +41,7 @@ The code in this folder is a post-internship refactor of the original working sc
 
 ### Inputs
 
-The workflow starts from paired gene-by-cell UMI matrices:
+The workflow starts from paired gene-by-cell UMI count matrices:
 
 - `C`: newly labeled / new RNA counts
 - `T`: pre-existing / old RNA counts
@@ -149,11 +149,23 @@ These files are not included in the public repository.
 
 ### Provenance
 
-The local input/reference files used here are based on internship data and external reference material derived from published studies, including:
+The main mESC input matrices used in this workflow were taken from processed supplementary files associated with the scNT-seq study by Qiu et al. This means the workflow does **not** start from raw FASTQ files, but from published gene-by-cell count matrices that were already generated upstream by the original study.
 
-- scNT-seq data from Qiu et al.
-- SLAM-seq reference material used for half-life comparison
-- additional external processed reference files used in stability/dropout validation
+These processed input matrices still required substantial downstream analysis, including:
+
+- construction of the `AnnData` object
+- QC metric calculation
+- cell and gene filtering
+- dimensionality reduction and clustering
+- cell-state annotation
+- RNA kinetic estimation
+- comparison to external reference datasets
+
+Additional local reference files used in the workflow were derived from published studies, including:
+
+- scNT-seq reference material from Qiu et al.
+- SLAM-seq supplementary material used for half-life comparison
+- processed external reference data used in stability/dropout diagnostics
 
 ## Main outputs
 
