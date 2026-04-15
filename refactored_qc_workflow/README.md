@@ -128,7 +128,7 @@ Contains the main computational steps for QC, dimensionality reduction, annotati
 ## Example figure: cell-state annotation
 
 <p align="center">
-  <img src="examples/umap_cell_states.svg" width="340">
+  <img src="examples/umap_cell_states.svg" width="280">
 </p>
 
 This UMAP shows the broad state annotation used in the workflow, separating cells into `Pluripotent`, `Intermediate`, and `2-cell like` populations. These state labels are used later to structure downstream analyses and interpret transcriptional heterogeneity in the mESC population.
