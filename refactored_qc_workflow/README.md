@@ -94,6 +94,14 @@ These matrices are used to build a layered `AnnData` object containing:
    - state-annotated `.h5ad` files
    - matrix exports for downstream variability / burst-kinetics analyses
 
+## Example figure: QC filtering
+
+<p align="center">
+  <img src="examples/violin_plots_POSTQC_cutoffs.png" width="650">
+</p>
+
+This figure summarizes the main quality-control metrics used for filtering, including genes detected, total UMI counts, and mitochondrial fraction. It represents one of the first major processing steps in the workflow and helps document how low-quality cells were excluded before downstream analysis.
+
 ## Repository structure
 
 ### `run_qc_report.py`
@@ -115,6 +123,14 @@ Contains reusable routines for QC figures, UMAP visualizations, validation plots
 ### `pipeline.py`
 Core analysis logic.  
 Contains the main computational steps for QC, dimensionality reduction, annotation, kinetic estimation, validation, and export.
+
+## Example figure: cell-state annotation
+
+<p align="center">
+  <img src="examples/umap_cell_states.png" width="500">
+</p>
+
+This UMAP shows the broad state annotation used in the workflow, separating cells into `Pluripotent`, `Intermediate`, and `2-cell like` populations. These state labels are used later to structure downstream analyses and interpret transcriptional heterogeneity in the mESC population.
 
 ## Input files
 
@@ -154,18 +170,17 @@ Outputs include:
 - per-state matrix exports
 - HVG-based exports for downstream analyses
 
-## Example figures
+## Example figure: dropout diagnostic
 
-Example visualizations can be stored in `examples/` and embedded here.
+<p align="center">
+  <img src="examples/dropout_vs_NTRrank_by_state.png" width="700">
+</p>
 
-Suggested examples:
-- a QC plot
-- a cell-state UMAP
-- a half-life validation plot
+This diagnostic summarizes how dropout-related behavior varies across NTR-ranked genes in annotated cell states. It helps connect preprocessing and state annotation to downstream variability analysis, and makes explicit that the workflow is designed not only to visualize cells but also to prepare biologically interpretable inputs for later dispersion and burst-kinetics analyses.
 
-For example:
+## How to run
 
-```md
-![QC violin example](examples/violin_plots_POSTQC_cutoffs.png)
-![Cell-state UMAP example](examples/umap_cell_states.png)
-![Half-life validation example](examples/half_life_vs_SLAM_0-24h.png)
+From the repository root:
+
+```bash
+python refactored_qc_workflow/run_qc_report.py
