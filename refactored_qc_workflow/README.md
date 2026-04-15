@@ -40,6 +40,7 @@ The code in this folder is a post-internship refactor of the original working sc
 ## Workflow overview
 
 ### Inputs
+
 The workflow starts from paired gene-by-cell UMI matrices:
 
 - `C`: newly labeled / new RNA counts
@@ -127,7 +128,7 @@ Contains the main computational steps for QC, dimensionality reduction, annotati
 ## Example figure: cell-state annotation
 
 <p align="center">
-  <img src="examples/umap_cell_states.svg" width="500">
+  <img src="examples/umap_cell_states.svg" width="340">
 </p>
 
 This UMAP shows the broad state annotation used in the workflow, separating cells into `Pluripotent`, `Intermediate`, and `2-cell like` populations. These state labels are used later to structure downstream analyses and interpret transcriptional heterogeneity in the mESC population.
@@ -147,6 +148,7 @@ Expected filenames:
 These files are not included in the public repository.
 
 ### Provenance
+
 The local input/reference files used here are based on internship data and external reference material derived from published studies, including:
 
 - scNT-seq data from Qiu et al.
