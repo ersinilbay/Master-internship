@@ -175,13 +175,13 @@ Outputs include:
 - per-state matrix exports
 - HVG-based exports for downstream analyses
 
-## Example figure: dropout diagnostic
+## Example figure: 4sU dropout check
 
 <p align="center">
   <img src="examples/dropout_vs_NTRrank_by_state.svg" width="700">
 </p>
 
-This diagnostic summarizes how dropout-related behavior varies across NTR-ranked genes in annotated cell states. It helps connect preprocessing and state annotation to downstream variability analysis, and makes explicit that the workflow is designed not only to visualize cells but also to prepare biologically interpretable inputs for later dispersion and burst-kinetics analyses.
+This diagnostic summarizes how 4sU dropout-related behavior varies across NTR-ranked genes in annotated cell states. This plot was based on the quantification bias paper by Berg et al., 2024.
 
 ## How to run
 
